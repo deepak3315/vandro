@@ -1,0 +1,7 @@
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { ArrowUpRight, Mail, Phone, MapPin } from 'lucide-react';
+import { SiteLayout, PageIntro } from '@/components/site/layout';
+import { Button } from '@/components/ui/button';
+import { pageHead } from '@/lib/site-content';
+export const Route = createFileRoute('/contact')({head:()=>pageHead('Contact VANDRO','Connect with VANDRO Private Limited for IT staffing, training, career development, and cloud solutions.'),component:Contact});
+function Contact(){return <SiteLayout><PageIntro label="LET’S CONNECT" title="Every possibility starts with a conversation." description="A new team, a new skill, a new direction. We look forward to hearing what’s next for you."/><section className="shell contact-content"><div><h2>VANDRO Private Limited</h2><p>Our contact channels are being finalized.<br/>Email, phone, and office details will be available here soon.</p><div className="contact-channels">{[[Mail,'Email'],[Phone,'Phone'],[MapPin,'Office']] .map(([I,t])=>{const Icon=I as typeof Mail;return <div key={String(t)}><Icon size={22}/><div><h3>{String(t)}</h3><span>Details coming soon</span></div></div>})}</div></div><div className="contact-next"><h2>What’s your next chapter?</h2><p>Explore the ways we support your business and your career.</p><Button asChild><Link to="/services">Explore our services <ArrowUpRight/></Link></Button></div></section></SiteLayout>}
