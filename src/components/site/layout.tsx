@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { ArrowUpRight, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import logo from '@/assets/vandro-wordmark.png.asset.json';
+import logo from '@/assets/vandro-wordmark.png';
 const links = [{ to: '/', label: 'Home' }, { to: '/about', label: 'About' }, { to: '/industries', label: 'Industries' }, { to: '/services', label: 'Services' }, { to: '/resources', label: 'Resources' }, { to: '/jobs', label: 'Careers' }] as const;
 export function SiteLayout({ children }: { children: ReactNode }) {
  const [open, setOpen] = useState(false);

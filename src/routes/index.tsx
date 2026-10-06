@@ -1,3 +1,4 @@
+import video from "@/assets/vandro-hero.webm";
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, ArrowDown, Pause, Play, Check, Globe2 } from 'lucide-react';
@@ -5,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { SiteLayout, SectionLabel, ConnectBand } from '@/components/site/layout';
 import { ServicesGrid } from '@/components/site/services';
 import { pageHead, industries, articles } from '@/lib/site-content';
-import video from '@/assets/vandro-hero.webm.asset.json';
 import poster from '@/assets/hero-poster.jpg';
 import team from '@/assets/team.jpg';
 import cloud from '@/assets/cloud.jpg';
