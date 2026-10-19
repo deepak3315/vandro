@@ -1,0 +1,575 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Vandro Careers API, data, private resume storage, admin identity and transactional email
+
+Parameters:
+  WebOrigin:
+    Type: String
+    Description: Exact HTTPS origin of the isolated preview site, without a trailing slash
+    AllowedPattern: "^(https://[A-Za-z0-9.-]+|http://localhost(:[0-9]+)?)$"
+  ProductionWebOrigin:
+    Type: String
+    Default: ""
+    Description: Optional exact production website origin, allowed only when intentionally enabling production
+    AllowedPattern: "^(|https://[A-Za-z0-9.-]+)$"
+  CognitoDomainPrefix:
+    Type: String
+    Description: Globally unique Cognito managed-login domain prefix
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+  SesFromAddress:
+    Type: String
+    Default: info@vandrotech.com
+    Description: SES-verified sender identity in this region
+
+Conditions:
+  HasProductionWebOrigin: !Not
+    - !Equals
+      - !Ref ProductionWebOrigin
+      - ""
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+    Timeout: 25
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  CareersApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: "$default"
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref WebOrigin
+          - !If
+            - HasProductionWebOrigin
+            - !Ref ProductionWebOrigin
+            - !Ref AWS::NoValue
+        AllowHeaders:
+          - authorization
+          - content-type
+          - idempotency-key
+          - x-upload-token
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+      Auth:
+        Authorizers:
+          CareersAdminAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${AdminUserPool}"
+              audience:
+                - !Ref AdminAppClient
+        DefaultAuthorizer: CareersAdminAuthorizer
+
+  AdminUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-admins"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: ON
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 14
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 3
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+          AttributeDataType: String
+
+  AdminUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref AdminUserPool
+
+  AdminAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AWS::StackName}-admin-spa"
+      UserPoolId: !Ref AdminUserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AccessTokenValidity: 15
+      IdTokenValidity: 15
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+      CallbackURLs:
+        - !Sub "${WebOrigin}/admin/jobs"
+        - !If
+          - HasProductionWebOrigin
+          - !Sub "${ProductionWebOrigin}/admin/jobs"
+          - !Ref AWS::NoValue
+      LogoutURLs:
+        - !Sub "${WebOrigin}/admin/jobs"
+        - !If
+          - HasProductionWebOrigin
+          - !Sub "${ProductionWebOrigin}/admin/jobs"
+          - !Ref AWS::NoValue
+      SupportedIdentityProviders:
+        - COGNITO
+
+  CareersAdmins:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: CareersAdmins
+      Description: Vandro careers administrators
+      UserPoolId: !Ref AdminUserPool
+
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${AWS::StackName}-jobs"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: publishStatus
+          AttributeType: S
+        - AttributeName: publishedAt
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: published-jobs
+          KeySchema:
+            - AttributeName: publishStatus
+              KeyType: HASH
+            - AttributeName: publishedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: admin-jobs
+          KeySchema:
+            - AttributeName: publishStatus
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+
+  ApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${AWS::StackName}-applications"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: applicationId
+          AttributeType: S
+        - AttributeName: reviewPartition
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: applicationId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: review-queue
+          KeySchema:
+            - AttributeName: reviewPartition
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  ResumeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref WebOrigin
+              - !If
+                - HasProductionWebOrigin
+                - !Ref ProductionWebOrigin
+                - !Ref AWS::NoValue
+            AllowedMethods:
+              - POST
+              - GET
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - ETag
+            MaxAge: 600
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-incomplete-uploads
+            Status: Enabled
+            Prefix: pending/
+            ExpirationInDays: 2
+          - Id: expire-resumes-after-six-months
+            Status: Enabled
+            Prefix: resumes/
+            ExpirationInDays: 185
+
+  ResumeBucketRequireTls:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ResumeBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt ResumeBucket.Arn
+              - !Sub "${ResumeBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  NotificationDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 180
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NotificationDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  CareersApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: careers-api-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-careers-api:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !Sub "${JobsTable.Arn}/index/*"
+                  - !GetAtt ApplicationsTable.Arn
+                  - !Sub "${ApplicationsTable.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "${ResumeBucket.Arn}/pending/*"
+                  - !Sub "${ResumeBucket.Arn}/resumes/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ResumeBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - pending/*
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt NotificationQueue.Arn
+
+  CareersApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-careers-api"
+      RetentionInDays: 30
+
+  CareersApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handler.ts
+        Format: esm
+        Target: node22
+        Minify: true
+        Sourcemap: false
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-careers-api"
+      CodeUri: .
+      Handler: src/handler.handler
+      Role: !GetAtt CareersApiFunctionRole.Arn
+      Environment:
+        Variables:
+          JOBS_TABLE: !Ref JobsTable
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          RESUME_BUCKET: !Ref ResumeBucket
+          NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
+          SES_FROM_ADDRESS: !Ref SesFromAddress
+          ADMIN_GROUP: CareersAdmins
+      Events:
+        PublicJobs:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /jobs
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        PublicJobDetail:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /jobs/{jobId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        CreateApplication:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /applications
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        CompleteApplication:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /applications/{applicationId}/complete
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        AdminPing:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/ping
+            Method: GET
+        AdminCreateJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs
+            Method: POST
+        AdminUpdateJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs/{jobId}
+            Method: PUT
+        AdminPublishJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs/{jobId}/publish
+            Method: POST
+        AdminCloseJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs/{jobId}/close
+            Method: POST
+        AdminArchiveJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs/{jobId}/archive
+            Method: POST
+        AdminListJobs:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/jobs
+            Method: GET
+        AdminApplicationDetail:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/applications/{applicationId}
+            Method: GET
+        AdminListApplications:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/applications
+            Method: GET
+        AdminUpdateApplication:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/applications/{applicationId}
+            Method: PUT
+        AdminQueueNotification:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CareersApi
+            Path: /admin/applications/{applicationId}/notify
+            Method: POST
+
+  NotificationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: careers-notifications
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-careers-notifications:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ApplicationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                Resource: !GetAtt NotificationQueue.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesFromAddress}"
+
+  NotificationLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-careers-notifications"
+      RetentionInDays: 30
+
+  NotificationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/notifications.ts
+        Format: esm
+        Target: node22
+        Minify: true
+        Sourcemap: false
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-careers-notifications"
+      CodeUri: .
+      Handler: src/notifications.handler
+      Role: !GetAtt NotificationFunctionRole.Arn
+      Environment:
+        Variables:
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          SES_FROM_ADDRESS: !Ref SesFromAddress
+      Events:
+        NotificationMessages:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt NotificationQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+Outputs:
+  CareersApiUrl:
+    Description: Public API base URL
+    Value: !Sub "https://${CareersApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+  UserPoolId:
+    Value: !Ref AdminUserPool
+  AdminAppClientId:
+    Value: !Ref AdminAppClient
+  CognitoHostedUiDomain:
+    Value: !Sub "https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com"
+  ResumeBucketName:
+    Value: !Ref ResumeBucket
+  JobsTableName:
+    Value: !Ref JobsTable
+  ApplicationsTableName:
+    Value: !Ref ApplicationsTable
