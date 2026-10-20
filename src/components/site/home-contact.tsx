@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ArrowUpRight, Mail, MapPin, Phone } from "lucide-react";
 import { SectionLabel } from "@/components/site/layout";
 import { submitContactEnquiry } from "@/lib/careers-api";
@@ -15,7 +15,7 @@ export function HomeContact() {
     setIsSubmitting(true);
     setStatus("");
     try {
-      const result = await submitContactEnquiry({ name: String(fields.get("name") ?? "").trim(), email: String(fields.get("email") ?? "").trim(), interest: String(fields.get("interest") ?? ""), message: String(fields.get("message") ?? "").trim() });
+      const result = await submitContactEnquiry({ name: String(fields.get("name") ?? "").trim(), email: String(fields.get("email") ?? "").trim(), phone: String(fields.get("phone") ?? "").trim(), interest: String(fields.get("interest") ?? ""), message: String(fields.get("message") ?? "").trim() });
       setStatus(result.message || "Thank you! Your enquiry has been sent.");
       form.reset();
     } catch (error) {
@@ -98,6 +98,18 @@ export function HomeContact() {
                   type="email"
                   autoComplete="email"
                   placeholder="you@company.com"
+                  required
+                />
+              </label>
+              <label>
+                Phone number <span aria-hidden="true">*</span>
+                <input
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="+91 98765 43210"
+                  pattern="\+?[0-9\s\-()]{7,20}"
+                  title="Enter a valid phone number"
                   required
                 />
               </label>

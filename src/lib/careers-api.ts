@@ -294,6 +294,7 @@ export function adminApi<T>(path: string, method = "GET", value?: unknown) {
 export function submitContactEnquiry(input: {
   name: string;
   email: string;
+  phone: string;
   interest: string;
   message: string;
 }) {
