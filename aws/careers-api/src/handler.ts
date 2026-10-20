@@ -130,33 +130,44 @@ function header(event: ApiEvent, name: string): string | undefined {
   return key ? event.headers?.[key] : undefined;
 }
 
+function parseGroups(claim: unknown): string[] {
+  if (Array.isArray(claim)) {
+    return claim.filter((g): g is string => typeof g === "string");
+  }
+  if (typeof claim !== "string") return [];
+  const value = claim.trim();
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((g): g is string => typeof g === "string");
+    }
+  } catch {
+    // API Gateway sends "[A B]" (unquoted), which is not valid JSON
+  }
+  return value
+    .replace(/^\[|\]$/g, "")
+    .split(/[,\s]+/)
+    .map((g) => g.replace(/^["']|["']$/g, "").trim())
+    .filter(Boolean);
+}
+
 function requireAdmin(event: ApiEvent): Record<string, unknown> {
   const claims = event.requestContext?.authorizer?.jwt?.claims;
   const groupClaim = claims?.["cognito:groups"];
-  let groups: string[] = [];
-  if (Array.isArray(groupClaim)) {
-    groups = groupClaim.filter(
-      (group): group is string => typeof group === "string",
-    );
-  } else if (typeof groupClaim === "string") {
-    try {
-      const parsed: unknown = JSON.parse(groupClaim);
-      groups = Array.isArray(parsed)
-        ? parsed.filter((group): group is string => typeof group === "string")
-        : groupClaim.split(",").map((group) => group.trim());
-    } catch {
-      groups = groupClaim.split(",").map((group) => group.trim());
-    }
-  }
-  if (
-    !claims ||
-    !groups.includes(process.env.ADMIN_GROUP ?? config.adminGroup)
-  ) {
+  const groups = parseGroups(groupClaim);
+  const adminGroup = process.env.ADMIN_GROUP ?? config.adminGroup;
+  console.log("ADMIN_DIAG", JSON.stringify({
+    claimKeys: claims ? Object.keys(claims) : null,
+    groupClaim: groupClaim ?? null,
+    groupClaimType: typeof groupClaim,
+    parsedGroups: groups,
+    adminGroup,
+  }));
+  if (!claims || !groups.includes(adminGroup)) {
     throw new HttpError(403, "Administrator access is required.");
   }
   return claims;
 }
-
 function validated<T>(parse: () => T): T {
   try {
     return parse();
