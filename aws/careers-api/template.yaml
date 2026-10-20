@@ -82,7 +82,7 @@ Resources:
         AllowAdminCreateUserOnly: true
       AutoVerifiedAttributes:
         - email
-      MfaConfiguration: ON
+      MfaConfiguration: "ON"
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
       Policies:
@@ -365,7 +365,7 @@ Resources:
       BuildProperties:
         EntryPoints:
           - src/handler.ts
-        Format: esm
+        Format: cjs
         Target: node22
         Minify: true
         Sourcemap: false
@@ -535,7 +535,7 @@ Resources:
       BuildProperties:
         EntryPoints:
           - src/notifications.ts
-        Format: esm
+        Format: cjs
         Target: node22
         Minify: true
         Sourcemap: false
