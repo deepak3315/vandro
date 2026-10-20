@@ -107,7 +107,7 @@ export function HomeContact() {
                   name="phone"
                   type="tel"
                   autoComplete="tel"
-                  placeholder="+91 98765 43210"
+                  placeholder="Phone number with country code"
                   pattern="\+?[0-9\s\-()]{7,20}"
                   title="Enter a valid phone number"
                   required
