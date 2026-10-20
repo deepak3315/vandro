@@ -1,30 +1,28 @@
-import { useState, type FormEvent } from "react";
+﻿import { useState, type FormEvent } from "react";
 import { ArrowUpRight, Mail, MapPin, Phone } from "lucide-react";
 import { SectionLabel } from "@/components/site/layout";
+import { submitContactEnquiry } from "@/lib/careers-api";
 
 export function HomeContact() {
   const [status, setStatus] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function submitEnquiry(event: FormEvent<HTMLFormElement>) {
+  async function submitEnquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    if (!form.reportValidity()) return;
-
+    if (!form.reportValidity() || isSubmitting) return;
     const fields = new FormData(form);
-    const subject = `Website enquiry: ${fields.get("interest")}`;
-    const body = [
-      `Name: ${fields.get("name")}`,
-      `Work email: ${fields.get("email")}`,
-      `Interested in: ${fields.get("interest")}`,
-      "",
-      "Message:",
-      fields.get("message"),
-    ].join("\n");
-
-    setStatus(
-      "Opening your email app with the enquiry details. Please send the prepared message to complete your enquiry.",
-    );
-    window.location.href = `mailto:info@vandrotech.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setIsSubmitting(true);
+    setStatus("");
+    try {
+      const result = await submitContactEnquiry({ name: String(fields.get("name") ?? "").trim(), email: String(fields.get("email") ?? "").trim(), interest: String(fields.get("interest") ?? ""), message: String(fields.get("message") ?? "").trim() });
+      setStatus(result.message || "Thank you! Your enquiry has been sent.");
+      form.reset();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not send your enquiry. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -125,8 +123,8 @@ export function HomeContact() {
                 />
               </label>
             </div>
-            <button className="home-contact-submit" type="submit">
-              Send enquiry <ArrowUpRight aria-hidden="true" />
+            <button className="home-contact-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send enquiry"} <ArrowUpRight aria-hidden="true" />
             </button>
             <p
               className="home-contact-form-status"
@@ -141,3 +139,5 @@ export function HomeContact() {
     </section>
   );
 }
+
+

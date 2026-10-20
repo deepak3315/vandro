@@ -290,3 +290,15 @@ export function adminApi<T>(path: string, method = "GET", value?: unknown) {
     true,
   );
 }
+
+export function submitContactEnquiry(input: {
+  name: string;
+  email: string;
+  interest: string;
+  message: string;
+}) {
+  return request<{ ok: boolean; message: string }>("/contact", {
+    method: "POST",
+    body: jsonBody(input),
+  });
+}

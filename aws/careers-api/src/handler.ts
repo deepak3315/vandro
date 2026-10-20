@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
+import { SendEmailCommand, SESClient } from "@aws-sdk/client-ses";
 import {
   DynamoDBDocumentClient,
   GetCommand,
@@ -74,6 +75,7 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 });
 const s3 = new S3Client({});
 const sqs = new SQSClient({});
+const ses = new SESClient({});
 
 const productionDependencies: Dependencies = {
   db: dynamo,
@@ -156,13 +158,6 @@ function requireAdmin(event: ApiEvent): Record<string, unknown> {
   const groupClaim = claims?.["cognito:groups"];
   const groups = parseGroups(groupClaim);
   const adminGroup = process.env.ADMIN_GROUP ?? config.adminGroup;
-  console.log("ADMIN_DIAG", JSON.stringify({
-    claimKeys: claims ? Object.keys(claims) : null,
-    groupClaim: groupClaim ?? null,
-    groupClaimType: typeof groupClaim,
-    parsedGroups: groups,
-    adminGroup,
-  }));
   if (!claims || !groups.includes(adminGroup)) {
     throw new HttpError(403, "Administrator access is required.");
   }
@@ -805,6 +800,36 @@ async function retryNotification(event: ApiEvent, deps: Dependencies) {
   return json(202, { notificationStatus: "QUEUED" });
 }
 
+
+async function submitContact(event: ApiEvent) {
+  const input = bodyObject(event);
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  const email = typeof input.email === "string" ? input.email.trim() : "";
+  const interest = typeof input.interest === "string" ? input.interest.trim() : "";
+  const message = typeof input.message === "string" ? input.message.trim() : "";
+
+  if (!name || name.length > 120) throw new HttpError(400, "Enter a valid name.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)
+    throw new HttpError(400, "Enter a valid email address.");
+  if (!["IT Staffing", "Training Programs", "Career Development", "Cloud Solutions", "Other"].includes(interest))
+    throw new HttpError(400, "Select a valid service.");
+  if (!message || message.length > 5000)
+    throw new HttpError(400, "Message is required and must be under 5000 characters.");
+
+  const sender = process.env.SES_FROM_ADDRESS;
+  if (!sender) throw new Error("SES sender is not configured.");
+
+  await ses.send(new SendEmailCommand({
+    Source: sender,
+    Destination: { ToAddresses: ["info@vandrotech.com"] },
+    ReplyToAddresses: [email],
+    Message: {
+      Subject: { Data: `Website enquiry: ${interest}`, Charset: "UTF-8" },
+      Body: { Text: { Data: `Name: ${name}\nEmail: ${email}\nInterested in: ${interest}\n\nMessage:\n${message}`, Charset: "UTF-8" } }
+    }
+  }));
+  return json(200, { ok: true, message: "Enquiry submitted successfully." });
+}
 export function createHandler(deps: Dependencies) {
   return async (event: ApiEvent) => {
     try {
@@ -817,6 +842,8 @@ export function createHandler(deps: Dependencies) {
               await getJob(deps, String(event.pathParameters?.jobId)),
             ),
           });
+        case "POST /contact":
+          return await submitContact(event);
         case "POST /applications":
           return await createOrResumeApplication(event, deps);
         case "POST /applications/{applicationId}/complete":
@@ -865,3 +892,4 @@ export function createHandler(deps: Dependencies) {
 }
 
 export const handler = createHandler(productionDependencies);
+
