@@ -18,6 +18,7 @@ import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as AdminJobsRouteImport } from './routes/admin.jobs'
 import { Route as JobsJobIdRouteImport } from './routes/jobs.$jobId'
+import { Route as ResourcesArticleIdRouteImport } from './routes/resources.$articleId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +65,11 @@ const JobsJobIdRoute = JobsJobIdRouteImport.update({
   path: '/$jobId',
   getParentRoute: () => JobsRoute,
 } as any)
+const ResourcesArticleIdRoute = ResourcesArticleIdRouteImport.update({
+  id: '/$articleId',
+  path: '/$articleId',
+  getParentRoute: () => ResourcesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -71,10 +77,11 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/industries': typeof IndustriesRoute
   '/jobs': typeof JobsRouteWithChildren
-  '/resources': typeof ResourcesRoute
+  '/resources': typeof ResourcesRouteWithChildren
   '/services': typeof ServicesRoute
   '/admin/jobs': typeof AdminJobsRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
+  '/resources/$articleId': typeof ResourcesArticleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,10 +89,11 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/industries': typeof IndustriesRoute
   '/jobs': typeof JobsRouteWithChildren
-  '/resources': typeof ResourcesRoute
+  '/resources': typeof ResourcesRouteWithChildren
   '/services': typeof ServicesRoute
   '/admin/jobs': typeof AdminJobsRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
+  '/resources/$articleId': typeof ResourcesArticleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,10 +102,11 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/industries': typeof IndustriesRoute
   '/jobs': typeof JobsRouteWithChildren
-  '/resources': typeof ResourcesRoute
+  '/resources': typeof ResourcesRouteWithChildren
   '/services': typeof ServicesRoute
   '/admin/jobs': typeof AdminJobsRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
+  '/resources/$articleId': typeof ResourcesArticleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/jobs'
     | '/jobs/$jobId'
+    | '/resources/$articleId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/jobs'
     | '/jobs/$jobId'
+    | '/resources/$articleId'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/jobs'
     | '/jobs/$jobId'
+    | '/resources/$articleId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -141,7 +153,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   IndustriesRoute: typeof IndustriesRoute
   JobsRoute: typeof JobsRouteWithChildren
-  ResourcesRoute: typeof ResourcesRoute
+  ResourcesRoute: typeof ResourcesRouteWithChildren
   ServicesRoute: typeof ServicesRoute
   AdminJobsRoute: typeof AdminJobsRoute
 }
@@ -211,6 +223,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsJobIdRouteImport
       parentRoute: typeof JobsRoute
     }
+    '/resources/$articleId': {
+      id: '/resources/$articleId'
+      path: '/$articleId'
+      fullPath: '/resources/$articleId'
+      preLoaderRoute: typeof ResourcesArticleIdRouteImport
+      parentRoute: typeof ResourcesRoute
+    }
   }
 }
 
@@ -224,13 +243,25 @@ const JobsRouteChildren: JobsRouteChildren = {
 
 const JobsRouteWithChildren = JobsRoute._addFileChildren(JobsRouteChildren)
 
+interface ResourcesRouteChildren {
+  ResourcesArticleIdRoute: typeof ResourcesArticleIdRoute
+}
+
+const ResourcesRouteChildren: ResourcesRouteChildren = {
+  ResourcesArticleIdRoute: ResourcesArticleIdRoute,
+}
+
+const ResourcesRouteWithChildren = ResourcesRoute._addFileChildren(
+  ResourcesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   IndustriesRoute: IndustriesRoute,
   JobsRoute: JobsRouteWithChildren,
-  ResourcesRoute: ResourcesRoute,
+  ResourcesRoute: ResourcesRouteWithChildren,
   ServicesRoute: ServicesRoute,
   AdminJobsRoute: AdminJobsRoute,
 }
