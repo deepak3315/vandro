@@ -807,6 +807,9 @@ async function submitContact(event: ApiEvent) {
   const email = typeof input.email === "string" ? input.email.trim() : "";
   const interest = typeof input.interest === "string" ? input.interest.trim() : "";
   const message = typeof input.message === "string" ? input.message.trim() : "";
+  const phone = typeof input.phone === "string" ? input.phone.trim() : "";
+  if (phone && !/^\+?[0-9\s\-()]{7,20}$/.test(phone))
+    throw new HttpError(400, "Enter a valid phone number.");
 
   if (!name || name.length > 120) throw new HttpError(400, "Enter a valid name.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)
@@ -825,7 +828,7 @@ async function submitContact(event: ApiEvent) {
     ReplyToAddresses: [email],
     Message: {
       Subject: { Data: `Website enquiry: ${interest}`, Charset: "UTF-8" },
-      Body: { Text: { Data: `Name: ${name}\nEmail: ${email}\nInterested in: ${interest}\n\nMessage:\n${message}`, Charset: "UTF-8" } }
+      Body: { Text: { Data: `Name: ${name}\nEmail: ${email}\nPhone: ${phone || "Not provided"}\nInterested in: ${interest}\n\nMessage:\n${message}`, Charset: "UTF-8" } }
     }
   }));
   return json(200, { ok: true, message: "Enquiry submitted successfully." });
