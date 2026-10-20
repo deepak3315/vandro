@@ -143,3 +143,42 @@ describe("Careers notification worker", () => {
     ]);
   });
 });
+
+
+describe("Careers notification attachments", () => {
+  test("attaches the resume to the team email", async () => {
+    const { dependencies, application } = makeDependencies();
+    application.resumeKey = "resumes/application-1.pdf";
+    const sent: { name: string; input: any }[] = [];
+    const wired = dependencies as any;
+    wired.s3 = {
+      async send() {
+        return {
+          Body: {
+            async transformToByteArray() {
+              return new TextEncoder().encode("%PDF-1.4 test resume");
+            },
+          },
+        };
+      },
+    };
+    wired.bucket = "resume-bucket";
+    wired.ses = {
+      async send(command: any) {
+        sent.push({ name: command.constructor.name, input: command.input });
+        return {};
+      },
+    };
+    const response = await createNotificationHandler(dependencies)({
+      Records: [
+        { messageId: "m1", body: JSON.stringify({ applicationId: "application-1" }) },
+      ],
+    });
+    expect(response.batchItemFailures).toEqual([]);
+    expect(sent[0].name).toBe("SendRawEmailCommand");
+    const raw = Buffer.from(sent[0].input.RawMessage.Data).toString("utf8");
+    expect(raw).toContain("application/pdf");
+    expect(raw).toContain("Content-Disposition: attachment");
+    expect(sent[1].name).toBe("SendEmailCommand");
+  });
+});

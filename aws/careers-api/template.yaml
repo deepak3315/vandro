@@ -1,4 +1,4 @@
-﻿AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Vandro Careers API, data, private resume storage, admin identity and transactional email
 
@@ -532,6 +532,14 @@ Resources:
                 Action:
                   - ses:SendEmail
                 Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesFromAddress}"
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesFromAddress}"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${ResumeBucket.Arn}/*"
 
   NotificationLogGroup:
     Type: AWS::Logs::LogGroup
@@ -559,6 +567,7 @@ Resources:
       Environment:
         Variables:
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          RESUME_BUCKET: !Ref ResumeBucket
           SES_FROM_ADDRESS: !Ref SesFromAddress
       Events:
         NotificationMessages:
