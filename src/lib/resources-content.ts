@@ -1,7 +1,7 @@
-import team from "@/assets/team.jpg";
-import training from "@/assets/industry-education.jpg";
-import technology from "@/assets/approach-team-reference.png";
-import cloud from "@/assets/cloud.jpg";
+import aiEditorial from "@/assets/resources-ai-editorial.jpg";
+import learningEditorial from "@/assets/resources-learning-editorial.jpg";
+import cloudEditorial from "@/assets/resources-cloud-editorial.jpg";
+import hiringEditorial from "@/assets/resources-hiring-editorial.jpg";
 
 export const resources = [
   {
@@ -12,9 +12,9 @@ export const resources = [
     summary:
       "Explore how AI is creating opportunities beyond conventional software development, including roles that combine engineering, customer understanding, and business problem-solving. Learn practical skills that can help professionals prepare.",
     publishedAt: "October 20, 2026",
-    image: technology,
+    image: aiEditorial,
     imageAlt:
-      "Technology professionals collaborating around a laptop in a modern office",
+      "Engineer working at a computer among technical equipment in a modern lab",
     content: [
       {
         heading: "AI work reaches beyond the model",
@@ -54,9 +54,9 @@ export const resources = [
     summary:
       "Build relevant technology skills through structured learning, hands-on projects, problem-solving, communication, and continuous upskilling—and turn that learning into clear evidence of job readiness.",
     publishedAt: "October 20, 2026",
-    image: training,
+    image: learningEditorial,
     imageAlt:
-      "Learners working together on a practical exercise in a study environment",
+      "Three learners collaborating over laptops in a contemporary study space",
     content: [
       {
         heading: "Start with a role and a baseline",
@@ -105,8 +105,9 @@ export const resources = [
     summary:
       "Align cloud adoption with business goals, manage infrastructure costs, improve security, and build for growth with practical workload selection, governance, monitoring, and continuous optimization.",
     publishedAt: "October 20, 2026",
-    image: cloud,
-    imageAlt: "Server racks in a modern cloud infrastructure environment",
+    image: cloudEditorial,
+    imageAlt:
+      "Network cables and illuminated server racks inside a data center",
     content: [
       {
         heading: "Begin with the business outcome",
@@ -152,9 +153,9 @@ export const resources = [
     summary:
       "Define role requirements clearly, assess practical ability, recognize transferable experience, and identify candidates who can grow with the team.",
     publishedAt: "October 20, 2026",
-    image: team,
+    image: hiringEditorial,
     imageAlt:
-      "Technology professionals discussing a project together in a modern office",
+      "Two professionals having a focused interview-style discussion at a laptop",
     content: [
       {
         heading: "Write the role around the work",
